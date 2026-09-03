@@ -366,7 +366,7 @@ export default function EarnPage() {
                   if (e.key === "Enter" && answer.trim()) handleSubmit();
                 }}
                 placeholder="Type your answer…"
-                className="w-full rounded-lg border border-border bg-bg-secondary/50 px-4 py-3 text-[0.9375rem] text-text-primary placeholder:text-text-tertiary focus:border-accent focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 transition-colors"
+                className="w-full rounded-lg border border-border bg-bg-secondary/50 px-4 py-3 text-base md:text-[0.9375rem] text-text-primary placeholder:text-text-tertiary focus:border-accent focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 transition-colors min-h-[48px]"
                 autoComplete="off"
                 autoFocus
               />

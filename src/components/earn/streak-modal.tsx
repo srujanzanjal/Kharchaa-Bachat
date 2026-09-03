@@ -50,7 +50,7 @@ export function StreakModal({
       {/* ── Modal Card ───────────────────────────────── */}
       <div
         className={cn(
-          "relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-border/80 bg-bg-secondary/95 p-6 shadow-2xl backdrop-blur-xl",
+          "relative z-10 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-border/80 bg-bg-secondary/95 p-6 shadow-2xl backdrop-blur-xl",
           "animate-slide-up"
         )}
       >
@@ -73,7 +73,7 @@ export function StreakModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary focus-visible:outline-none"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary focus-visible:outline-none -mr-2"
             aria-label="Close streak modal"
           >
             <span className="text-base leading-none">✕</span>

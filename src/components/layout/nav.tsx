@@ -78,22 +78,22 @@ export function Nav() {
   return (
     <>
       {/* ── Mobile top bar ──────────────────────────────── */}
-      <header className="flex h-12 items-center justify-between border-b border-border/50 px-5 md:hidden">
+      <header className="flex h-[calc(3rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] items-center justify-between border-b border-border/50 px-5 md:hidden">
         <Link
           href="/"
           onClick={handleLogoTap}
-          className="text-[0.875rem] font-semibold tracking-tight text-text-primary select-none touch-manipulation"
+          className="text-[0.875rem] font-semibold tracking-tight text-text-primary select-none touch-manipulation py-2 -my-2"
           title="kharchaa bachat"
         >
           kharchaa bachat
         </Link>
         <Link
           href="/dev"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-text-tertiary transition-opacity opacity-40 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-text-tertiary transition-opacity opacity-40 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
           title="Developer Diagnostics"
           aria-label="Developer Diagnostics"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="4 17 10 11 4 5" />
             <line x1="12" y1="19" x2="20" y2="19" />
           </svg>

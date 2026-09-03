@@ -30,7 +30,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             className={cn(
               "h-11 w-full bg-transparent text-text-primary placeholder:text-text-tertiary",
-              "text-[0.9375rem] border-none outline-none ring-0 shadow-none",
+              "text-base md:text-[0.9375rem] border-none outline-none ring-0 shadow-none",
               "focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0",
               "min-h-[44px]" // touch target
             )}

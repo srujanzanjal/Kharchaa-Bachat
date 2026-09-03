@@ -257,6 +257,8 @@ export default function AddExpensePage() {
               placeholder="0"
               min="0.01"
               step="any"
+              inputMode="decimal"
+              pattern="[0-9]*[.,]?[0-9]*"
               disabled={isSubmitting}
               value={amountStr}
               onChange={(e) => {
@@ -312,7 +314,7 @@ export default function AddExpensePage() {
                       setCoverageCheck(null);
                     }}
                     className={cn(
-                      "rounded-md py-2.5 px-2 text-[0.8125rem] font-medium border text-center transition-all duration-150 min-h-[42px] select-none touch-manipulation focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+                      "rounded-md py-2.5 px-2 text-[0.8125rem] font-medium border text-center transition-all duration-150 min-h-[44px] select-none touch-manipulation focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
                       isSelected
                         ? "border-accent bg-accent/15 text-text-primary shadow-sm"
                         : "border-border bg-bg-secondary text-text-secondary hover:text-text-primary hover:border-border-active"
@@ -329,11 +331,16 @@ export default function AddExpensePage() {
           {owner === "both" && totalPaise > 0 && (
             <div className="rounded-lg border border-border bg-bg-secondary p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="type-body-sm text-text-secondary">
-                  {!isCustomSplit
-                    ? `Default 50/50 split (${formatPaise(defaultSrujanPaise)} each)`
-                    : "Custom split"}
-                </span>
+                <div>
+                  <span className="type-body-sm font-medium text-text-primary">
+                    {!isCustomSplit ? "Equal 50/50 Split" : "Custom split"}
+                  </span>
+                  {!isCustomSplit && (
+                    <p className="text-[0.75rem] text-text-tertiary">
+                      Srujan ₹{paiseToRupees(defaultSrujanPaise)} · Disha ₹{paiseToRupees(defaultDishaPaise)}
+                    </p>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -356,6 +363,7 @@ export default function AddExpensePage() {
                     <Input
                       type="number"
                       prefix="₹"
+                      inputMode="decimal"
                       disabled={isSubmitting}
                       value={customSrujanStr}
                       onChange={(e) => setCustomSrujanStr(e.target.value)}
@@ -368,6 +376,7 @@ export default function AddExpensePage() {
                     <Input
                       type="number"
                       prefix="₹"
+                      inputMode="decimal"
                       disabled={isSubmitting}
                       value={customDishaStr}
                       onChange={(e) => setCustomDishaStr(e.target.value)}

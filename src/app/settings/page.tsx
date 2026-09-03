@@ -134,6 +134,7 @@ export default function SettingsPage() {
                     type="number"
                     prefix="₹"
                     min="1"
+                    inputMode="decimal"
                     disabled={isSaving}
                     value={newRateStr}
                     onChange={(e) => {

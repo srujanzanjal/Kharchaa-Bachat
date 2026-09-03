@@ -13,6 +13,19 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: APP_NAME,
   description: "Track discretionary food spending for two.",
+  applicationName: APP_NAME,
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: APP_NAME,
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -27,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${outfit.variable} h-full`}>
       <body className="flex min-h-[100dvh] flex-col font-sans bg-bg-primary text-text-primary antialiased">
         <Nav />
-        <main className="flex-1 pb-20 md:pb-0">
+        <main className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
           {children}
         </main>
       </body>

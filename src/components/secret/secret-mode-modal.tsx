@@ -56,7 +56,7 @@ export function SecretModeModal({ isOpen, onClose }: SecretModeModalProps) {
       {/* ── Modal Card ───────────────────────────────── */}
       <div
         className={cn(
-          "relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-border/80 bg-bg-secondary/95 p-6 sm:p-8 shadow-2xl backdrop-blur-xl",
+          "relative z-10 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-border/80 bg-bg-secondary/95 p-6 sm:p-8 shadow-2xl backdrop-blur-xl",
           "animate-slide-up"
         )}
       >
@@ -83,7 +83,7 @@ export function SecretModeModal({ isOpen, onClose }: SecretModeModalProps) {
           <button
             type="button"
             onClick={handleClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent -mr-2"
             aria-label="Close secret mode"
           >
             <span className="text-base leading-none">✕</span>
