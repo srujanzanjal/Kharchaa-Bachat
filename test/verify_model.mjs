@@ -2384,7 +2384,7 @@ function simulateUnifiedHistoryFeed(sim, householdId) {
             const d = parts[2].padStart(2, "0");
             if (m >= 0 && m < 12) return `${d} ${MONTH_NAMES[m]}`;
           }
-        } catch {}
+        } catch { }
         return dateStr;
       }
 

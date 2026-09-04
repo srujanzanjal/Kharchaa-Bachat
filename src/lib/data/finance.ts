@@ -60,7 +60,7 @@ function formatAllowanceDateLabel(dateStr: string): string {
         return `${day} ${MONTH_NAMES[monthIdx]}`;
       }
     }
-  } catch {}
+  } catch { }
   return dateStr;
 }
 
@@ -747,8 +747,8 @@ export async function fetchHistoryLedger(params?: {
         if (creditKind === "allowance") {
           icon = "💰";
           const dateLabel = allowanceDate ? formatAllowanceDateLabel(allowanceDate) : null;
-          title = dateLabel ? `Daily allowance · ${dateLabel}` : "Daily allowance";
-          note = dateLabel ? `Allowance for ${dateLabel}` : "Daily allowance";
+          title = dateLabel ? `Daily allowance` : "Daily allowance";
+          note = dateLabel ? `${dateLabel}` : "Daily allowance";
         } else if (creditKind === "earn") {
           icon = "🎮";
           title = "Earn reward";
