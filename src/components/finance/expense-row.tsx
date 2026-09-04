@@ -1,13 +1,22 @@
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { formatPaise } from "@/lib/money";
-import { EXPENSE_CATEGORY_LABELS, type ExpenseCategory, type ExpenseOwner } from "@/types";
+import {
+  EXPENSE_CATEGORY_ICONS,
+  EXPENSE_CATEGORY_LABELS,
+  type ExpenseCategory,
+  type ExpenseOwner,
+  type FlowType,
+} from "@/types";
 
-interface ExpenseRowProps {
+export interface ExpenseRowProps {
   amount?: number;
   amountPaise?: number;
+  flowType?: FlowType;
   owner: ExpenseOwner | string;
   category?: ExpenseCategory | string | null;
+  icon?: string | null;
+  title?: string | null;
   note?: string | null;
   splitDetail?: string | null;
   timestamp: string;
@@ -17,14 +26,18 @@ interface ExpenseRowProps {
 export function ExpenseRow({
   amount,
   amountPaise,
+  flowType = "debit",
   owner,
   category,
+  icon,
+  title,
   note,
   splitDetail,
   timestamp,
   className,
 }: ExpenseRowProps) {
-  const normalizedOwner = owner.toLowerCase();
+  const isCredit = flowType === "credit";
+  const normalizedOwner = (owner || "").toLowerCase();
   const displayOwner =
     normalizedOwner === "srujan"
       ? "Srujan"
@@ -32,14 +45,30 @@ export function ExpenseRow({
       ? "Disha"
       : "Both";
 
-  const categoryLabel = category
-    ? (EXPENSE_CATEGORY_LABELS[category as ExpenseCategory] || category)
-    : null;
+  const resolvedIcon =
+    icon ||
+    (isCredit
+      ? "💰"
+      : category
+      ? EXPENSE_CATEGORY_ICONS[category as ExpenseCategory] || "📝"
+      : null);
 
-  const formattedAmount =
+  const resolvedTitle =
+    title ||
+    (isCredit
+      ? "Credit"
+      : category
+      ? EXPENSE_CATEGORY_LABELS[category as ExpenseCategory] || category
+      : "Expense");
+
+  const rawAmountPaise =
     amountPaise !== undefined
-      ? formatPaise(amountPaise)
-      : `−${formatCurrency(amount ?? 0)}`;
+      ? amountPaise
+      : Math.round((amount ?? 0) * 100);
+
+  const formattedAmount = isCredit
+    ? `+${formatPaise(rawAmountPaise)}`
+    : `−${formatPaise(rawAmountPaise)}`;
 
   return (
     <div
@@ -51,18 +80,19 @@ export function ExpenseRow({
       <div className="flex flex-col gap-0.5 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <Badge variant="neutral">{displayOwner}</Badge>
-          {(categoryLabel || note) && (
-            <span className="type-body-sm text-text-secondary truncate">
-              {categoryLabel ? (
-                <>
-                  <span>{categoryLabel}</span>
-                  {note && <span className="text-text-tertiary"> · {note}</span>}
-                </>
-              ) : (
-                note
-              )}
+          <span className="type-body-sm text-text-secondary truncate flex items-center gap-1.5">
+            {resolvedIcon && (
+              <span className="text-sm shrink-0" aria-hidden="true">
+                {resolvedIcon}
+              </span>
+            )}
+            <span className="font-medium text-text-primary">
+              {resolvedTitle}
             </span>
-          )}
+            {note && (
+              <span className="text-text-tertiary truncate"> · {note}</span>
+            )}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[0.6875rem] leading-tight text-text-tertiary">
@@ -71,14 +101,19 @@ export function ExpenseRow({
           {splitDetail && (
             <>
               <span className="text-[0.6875rem] text-text-tertiary">•</span>
-              <span className="text-[0.6875rem] text-text-tertiary">
+              <span className="text-[0.6875rem] text-text-tertiary truncate">
                 {splitDetail}
               </span>
             </>
           )}
         </div>
       </div>
-      <span className="type-mono text-text-primary whitespace-nowrap font-medium">
+      <span
+        className={cn(
+          "type-mono whitespace-nowrap font-medium text-sm md:text-base shrink-0",
+          isCredit ? "text-positive" : "text-destructive"
+        )}
+      >
         {formattedAmount}
       </span>
     </div>

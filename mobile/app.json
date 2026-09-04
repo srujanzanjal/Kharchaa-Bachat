@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Kharchaa Bachat",
+    "slug": "kharchaa-bachat",
+    "scheme": "kharchaabachat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#131211",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kharchaabachat.app"
+    },
+    "android": {
+      "package": "com.kharchaabachat.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#131211"
+      },
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#131211",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a47803a1-6624-45fa-8e94-bc8409de6159"
+      }
+    }
+  }
+}

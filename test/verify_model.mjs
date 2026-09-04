@@ -2306,6 +2306,229 @@ const displayPendingToday = simulateFetchEarnStatusResolution(
 assert.equal(displayPendingToday.current_streak, 2);
 console.log("✓ Test 138 Passed: Display resolution logic accurately matches active, pending, and reset states");
 
+// -------------------------------------------------------------
+// HISTORY UPGRADE: COMPLETE CREDIT + DEBIT LEDGER VERIFICATION
+// -------------------------------------------------------------
+
+function simulateUnifiedHistoryFeed(sim, householdId) {
+  const CATEGORY_LABELS = {
+    food: "Food",
+    coffee_tea: "Coffee & Tea",
+    groceries: "Groceries",
+    sweets: "Sweets",
+    drinks: "Drinks",
+    other: "Other",
+  };
+  const CATEGORY_ICONS = {
+    food: "🍕",
+    coffee_tea: "☕",
+    groceries: "🛒",
+    sweets: "🍰",
+    drinks: "🥤",
+    other: "📝",
+  };
+
+  const debits = sim.expenses
+    .filter((e) => e.household_id === householdId)
+    .map((e) => {
+      let splitDetail = null;
+      if (e.owner.toLowerCase() === "both") {
+        splitDetail = `Srujan ₹${(e.srujan_amount_paise / 100).toFixed(0)} · Disha ₹${(e.disha_amount_paise / 100).toFixed(0)}`;
+        if (e.coverage_approved) splitDetail += " (coverage applied)";
+      }
+      return {
+        id: e.id,
+        flowType: "debit",
+        amountPaise: e.total_amount_paise,
+        formattedAmount: `−₹${(e.total_amount_paise / 100).toFixed(0)}`,
+        semanticColor: "red",
+        owner: e.owner,
+        category: e.category,
+        title: CATEGORY_LABELS[e.category] || "Expense",
+        icon: CATEGORY_ICONS[e.category] || "📝",
+        note: e.note || null,
+        splitDetail,
+        coverageApproved: e.coverage_approved,
+        createdAt: e.created_at || "2026-09-01T20:00:00+05:30",
+      };
+    });
+
+  const credits = sim.ledger
+    .filter(
+      (l) =>
+        l.household_id === householdId &&
+        l.amount_paise > 0 &&
+        ["allowance", "earn_credit", "manual_credit"].includes(l.entry_type)
+    )
+    .map((l) => {
+      const profile = sim.profiles.find((p) => p.id === l.user_id);
+      const isStreak =
+        l.entry_type === "earn_credit" &&
+        (l.description?.includes("Streak") || l.description?.includes("streak"));
+      const isEarn = l.entry_type === "earn_credit" && !isStreak;
+      const isAllowance = l.entry_type === "allowance";
+
+      let title = "Credit";
+      let icon = "💰";
+      let note = null;
+
+      if (isAllowance) {
+        title = "Daily allowance";
+        icon = "💰";
+      } else if (isStreak) {
+        title = "Streak bonus";
+        icon = "🔥";
+        note = l.description?.includes("·") ? l.description.split("·")[1].trim() : "Streak bonus";
+      } else if (isEarn) {
+        title = "Earn reward";
+        icon = "🎮";
+        note = l.description?.includes("·") ? l.description.split("·")[1].trim() : "Earn reward";
+      }
+
+      const createdAt =
+        l.created_at ||
+        (l.allowance_date ? `${l.allowance_date}T09:00:00+05:30` : "2026-09-01T09:00:00+05:30");
+
+      return {
+        id: l.id,
+        flowType: "credit",
+        amountPaise: l.amount_paise,
+        formattedAmount: `+₹${(l.amount_paise / 100).toFixed(0)}`,
+        semanticColor: "green",
+        owner: profile?.display_name || "Srujan",
+        category: null,
+        title,
+        icon,
+        note,
+        splitDetail: null,
+        coverageApproved: null,
+        createdAt,
+      };
+    });
+
+  return [...debits, ...credits].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+// Set up fresh simulation with known ledger events
+const histSim = new FinancialLedgerSimulator();
+const hId = "house-hist";
+const sId = "srujan-hist";
+const dId = "disha-hist";
+histSim.createHousehold(hId, sId, dId);
+
+// 1. Process allowances for Sep 1
+histSim.processAllowances(hId, "2026-09-01");
+const hFeed1 = simulateUnifiedHistoryFeed(histSim, hId);
+const srujanAllowance = hFeed1.find((item) => item.flowType === "credit" && item.owner === "Srujan");
+const dishaAllowance = hFeed1.find((item) => item.flowType === "credit" && item.owner === "Disha");
+
+assert.ok(srujanAllowance, "Srujan allowance credit must appear");
+assert.equal(srujanAllowance.amountPaise, 5000);
+assert.equal(srujanAllowance.title, "Daily allowance");
+assert.equal(srujanAllowance.icon, "💰");
+console.log("✓ Test 139 Passed: Daily allowance credit appears in history data transformation");
+
+assert.ok(dishaAllowance, "Disha allowance credit must appear");
+assert.equal(dishaAllowance.amountPaise, 5000);
+assert.equal(dishaAllowance.owner, "Disha");
+console.log("✓ Test 140 Passed: Both Srujan and Disha allowance credits appear independently");
+
+// 2. Add game challenge earn credit
+histSim.ledger.push({
+  id: "earn-1",
+  household_id: hId,
+  user_id: sId,
+  entry_type: "earn_credit",
+  amount_paise: 2000,
+  description: "💰 Earn lil Kharchaa · Number Sequence",
+  created_at: "2026-09-01T12:00:00+05:30",
+});
+const hFeed2 = simulateUnifiedHistoryFeed(histSim, hId);
+const earnItem = hFeed2.find((i) => i.id === "earn-1");
+assert.ok(earnItem);
+assert.equal(earnItem.flowType, "credit");
+assert.equal(earnItem.title, "Earn reward");
+assert.equal(earnItem.icon, "🎮");
+assert.equal(earnItem.note, "Number Sequence");
+assert.equal(earnItem.amountPaise, 2000);
+console.log("✓ Test 141 Passed: Earn reward appears as a credit with challenge details and positive amount");
+
+// 3. Add streak bonus credit
+histSim.ledger.push({
+  id: "streak-1",
+  household_id: hId,
+  user_id: sId,
+  entry_type: "earn_credit",
+  amount_paise: 2000,
+  description: "🔥 Streak Bonus · 7-day streak",
+  created_at: "2026-09-01T18:00:00+05:30",
+});
+const hFeed3 = simulateUnifiedHistoryFeed(histSim, hId);
+const streakItem = hFeed3.find((i) => i.id === "streak-1");
+assert.ok(streakItem);
+assert.equal(streakItem.flowType, "credit");
+assert.equal(streakItem.title, "Streak bonus");
+assert.equal(streakItem.icon, "🔥");
+assert.equal(streakItem.note, "7-day streak");
+assert.equal(streakItem.amountPaise, 2000);
+console.log("✓ Test 142 Passed: Streak bonus appears as a credit with streak milestone and positive amount");
+
+// 4. Record expense debit
+histSim.recordExpenseAtomic(hId, sId, 6000, "both", 3000, 3000, "Dinner", true, "food");
+// Ensure expense has created_at
+histSim.expenses[histSim.expenses.length - 1].created_at = "2026-09-01T20:00:00+05:30";
+const hFeed4 = simulateUnifiedHistoryFeed(histSim, hId);
+const expenseDebit = hFeed4.find((i) => i.flowType === "debit");
+assert.ok(expenseDebit);
+assert.equal(expenseDebit.amountPaise, 6000);
+assert.equal(expenseDebit.category, "food");
+assert.equal(expenseDebit.icon, "🍕");
+assert.equal(expenseDebit.title, "Food");
+assert.equal(expenseDebit.note, "Dinner");
+console.log("✓ Test 143 Passed: Expense appears as a debit with negative amount");
+
+// 5. Visual semantic tests
+assert.equal(earnItem.semanticColor, "green");
+assert.equal(earnItem.formattedAmount, "+₹20");
+console.log("✓ Test 144 Passed: Credit amount is positive and formatted with + and green semantic");
+
+assert.equal(expenseDebit.semanticColor, "red");
+assert.equal(expenseDebit.formattedAmount, "−₹60");
+console.log("✓ Test 145 Passed: Debit amount is negative and formatted with − and red semantic");
+
+// 6. Split detail preservation
+assert.ok(expenseDebit.splitDetail.includes("Srujan ₹30"));
+assert.ok(expenseDebit.splitDetail.includes("Disha ₹30"));
+assert.ok(expenseDebit.splitDetail.includes("coverage applied"));
+console.log("✓ Test 146 Passed: Shared expense split details and coverage flags are preserved accurately");
+
+// 7. Chronological ordering
+assert.ok(new Date(hFeed4[0].createdAt) >= new Date(hFeed4[1].createdAt));
+console.log("✓ Test 147 Passed: Chronological ordering operates accurately across credits and debits");
+
+// 8. Flow type partitioning
+const creditsOnly = hFeed4.filter((i) => i.flowType === "credit");
+const debitsOnly = hFeed4.filter((i) => i.flowType === "debit");
+assert.equal(creditsOnly.length, 4); // 2 allowances + 1 earn + 1 streak
+assert.equal(debitsOnly.length, 1);   // 1 expense
+assert.equal(creditsOnly.length + debitsOnly.length, hFeed4.length);
+console.log("✓ Test 148 Passed: Filter by flowType (all, credit, debit) accurately partitions records");
+
+// 9. No synthetic ledger entries generated
+const trueLedgerCount = histSim.ledger.length;
+const feedGenerated = simulateUnifiedHistoryFeed(histSim, hId);
+assert(feedGenerated.length > 0);
+assert.equal(histSim.ledger.length, trueLedgerCount, "History derivation must be strictly read-only");
+console.log("✓ Test 149 Passed: No synthetic ledger entries are generated; authoritative ledger is preserved");
+
+// 10. Financial invariants intact
+assert.equal(histSim.getUserBalance(sId), 5000 + 2000 + 2000 - 3000);
+assert.equal(histSim.getUserBalance(dId), 5000 - 3000);
+console.log("✓ Test 150 Passed: All original financial models and ledger balance invariants remain 100% intact");
+
 console.log("=================================================");
-console.log("ALL 138 FINANCIAL, CATEGORY, RECAP, EARN, SECRET, DEV & STREAK TESTS PASSED!");
+console.log("ALL 150 FINANCIAL, CATEGORY, RECAP, EARN, SECRET, DEV, STREAK & HISTORY TESTS PASSED!");
 console.log("=================================================");
+

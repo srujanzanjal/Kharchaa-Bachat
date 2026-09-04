@@ -27,6 +27,16 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   other: "Other",
 };
 
+/** Visual icons for each category */
+export const EXPENSE_CATEGORY_ICONS: Record<ExpenseCategory, string> = {
+  food: "🍕",
+  coffee_tea: "☕",
+  groceries: "🛒",
+  sweets: "🍰",
+  drinks: "🥤",
+  other: "📝",
+};
+
 /** Ordered list of category options for selectors */
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   "food",
@@ -38,6 +48,25 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 ];
 
 export type LedgerType = "allowance" | "expense_debit" | "manual_credit" | "earn_credit";
+export type FlowType = "credit" | "debit";
+export type CreditKind = "allowance" | "earn" | "streak" | "manual";
+
+export interface HistoryLedgerItem {
+  id: string;
+  flowType: FlowType;
+  amountPaise: number;
+  owner: ExpenseOwner | string;
+  category?: ExpenseCategory | null;
+  creditKind?: CreditKind | null;
+  title: string;
+  icon: string;
+  note?: string | null;
+  splitDetail?: string | null;
+  srujanAmountPaise?: number | null;
+  dishaAmountPaise?: number | null;
+  coverageApproved?: boolean | null;
+  createdAt: string;
+}
 
 // ── Database Models ────────────────────────────────
 
