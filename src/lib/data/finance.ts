@@ -35,15 +35,65 @@ const VALID_CATEGORIES: ExpenseCategory[] = [
   "other",
 ];
 
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function formatAllowanceDateLabel(dateStr: string): string {
+  try {
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      const monthIdx = Number(parts[1]) - 1;
+      const day = parts[2].padStart(2, "0");
+      if (monthIdx >= 0 && monthIdx < 12) {
+        return `${day} ${MONTH_NAMES[monthIdx]}`;
+      }
+    }
+  } catch {}
+  return dateStr;
+}
+
+/**
+ * Ensures daily allowance catch-up runs first up to today (Asia/Kolkata date).
+ * Strictly idempotent, fast, and server-side guaranteed.
+ */
+export async function ensureAllowanceCatchUp(
+  clientOrDb?: { query: (q: string, params?: unknown[]) => Promise<unknown> }
+): Promise<void> {
+  try {
+    const db = clientOrDb || getDb();
+    await db.query(
+      "SELECT process_household_allowances($1, (NOW() AT TIME ZONE 'Asia/Kolkata')::date);",
+      [DEFAULT_HOUSEHOLD_ID]
+    );
+  } catch (err) {
+    console.error("[ensureAllowanceCatchUp]", err);
+  }
+}
+
 /**
  * Fetches the aggregate ledger summary for the private household.
- * Always computes balance dynamically directly from the ledger.
+ * Guarantees allowance catch-up completes first, then computes balance from ledger.
  */
 export async function fetchHouseholdSummary(): Promise<
   AsyncData<HouseholdSummary>
 > {
   try {
     const db = getDb();
+    // 1. Crucial guarantee: allowance catch-up runs before balances are calculated
+    await ensureAllowanceCatchUp(db);
+
     const result = await db.query(
       "SELECT get_household_summary($1) AS summary;",
       [DEFAULT_HOUSEHOLD_ID]
@@ -74,7 +124,7 @@ export async function fetchHouseholdSummary(): Promise<
 
 /**
  * Idempotent allowance catch-up processor.
- * Guarantees all missing days up to today are credited without duplicates.
+ * Guarantees all missing days up to today (Asia/Kolkata) are credited without duplicates.
  */
 export async function runAllowanceCatchUp(): Promise<
   AsyncData<{ allowances_created: number }>
@@ -82,7 +132,7 @@ export async function runAllowanceCatchUp(): Promise<
   try {
     const db = getDb();
     const result = await db.query(
-      "SELECT process_household_allowances($1, CURRENT_DATE) AS res;",
+      "SELECT process_household_allowances($1, (NOW() AT TIME ZONE 'Asia/Kolkata')::date) AS res;",
       [DEFAULT_HOUSEHOLD_ID]
     );
 
@@ -176,6 +226,9 @@ export async function checkExpenseCoverage(params: {
     }
 
     const db = getDb();
+    // Ensure allowance catch-up has completed for today before checking balances/coverage
+    await ensureAllowanceCatchUp(db);
+
     const result = await db.query(
       "SELECT check_expense_coverage($1, $2, $3, $4, $5) AS check_res;",
       [
@@ -348,6 +401,9 @@ export async function recordExpenseAtomic(params: {
       params.owner === "disha" ? DISHA_PROFILE_ID : SRUJAN_PROFILE_ID;
 
     const db = getDb();
+    // Ensure allowance catch-up has completed for today before recording expense
+    await ensureAllowanceCatchUp(db);
+
     const result = await db.query(
       `SELECT record_expense_atomic($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) AS record_res;`,
       [
@@ -517,6 +573,9 @@ export async function fetchHistoryLedger(params?: {
     );
     const db = getDb();
 
+    // 1. Crucial guarantee: ensure allowance catch-up runs before reading history
+    await ensureAllowanceCatchUp(db);
+
     let query: string;
     let queryParams: unknown[];
 
@@ -554,6 +613,8 @@ export async function fetchHistoryLedger(params?: {
             NULL::text AS profile_name,
             NULL::text AS credit_kind,
             NULL::text AS description,
+            NULL::text AS allowance_date,
+            e.created_at AS effective_date,
             e.created_at
           FROM expenses e
           WHERE e.household_id = $1
@@ -580,16 +641,25 @@ export async function fetchHistoryLedger(params?: {
               ELSE 'manual'
             END AS credit_kind,
             l.description,
+            l.allowance_date::text AS allowance_date,
+            CASE
+              WHEN l.entry_type = 'allowance' AND (l.created_at AT TIME ZONE 'Asia/Kolkata')::date > l.allowance_date
+                THEN (l.allowance_date::text || ' 00:00:00+05:30')::timestamptz
+              ELSE l.created_at
+            END AS effective_date,
             l.created_at
           FROM ledger l
           JOIN profiles p ON p.id = l.user_id
           WHERE l.household_id = $1
             AND l.amount_paise > 0
             AND l.entry_type IN ('allowance', 'earn_credit', 'manual_credit')
-            AND l.created_at >= $2
-            AND l.created_at < $3
+            AND (
+              (l.entry_type = 'allowance' AND l.allowance_date >= $2::date AND l.allowance_date < $3::date)
+              OR
+              (l.entry_type <> 'allowance' AND l.created_at >= $2 AND l.created_at < $3)
+            )
         ) unified_history
-        ORDER BY created_at DESC
+        ORDER BY effective_date DESC, created_at DESC, id DESC
         LIMIT $4;
       `;
       queryParams = [DEFAULT_HOUSEHOLD_ID, startIso, endIso, validLimit];
@@ -609,6 +679,8 @@ export async function fetchHistoryLedger(params?: {
             NULL::text AS profile_name,
             NULL::text AS credit_kind,
             NULL::text AS description,
+            NULL::text AS allowance_date,
+            e.created_at AS effective_date,
             e.created_at
           FROM expenses e
           WHERE e.household_id = $1
@@ -633,6 +705,12 @@ export async function fetchHistoryLedger(params?: {
               ELSE 'manual'
             END AS credit_kind,
             l.description,
+            l.allowance_date::text AS allowance_date,
+            CASE
+              WHEN l.entry_type = 'allowance' AND (l.created_at AT TIME ZONE 'Asia/Kolkata')::date > l.allowance_date
+                THEN (l.allowance_date::text || ' 00:00:00+05:30')::timestamptz
+              ELSE l.created_at
+            END AS effective_date,
             l.created_at
           FROM ledger l
           JOIN profiles p ON p.id = l.user_id
@@ -640,7 +718,7 @@ export async function fetchHistoryLedger(params?: {
             AND l.amount_paise > 0
             AND l.entry_type IN ('allowance', 'earn_credit', 'manual_credit')
         ) unified_history
-        ORDER BY created_at DESC
+        ORDER BY effective_date DESC, created_at DESC, id DESC
         LIMIT $2;
       `;
       queryParams = [DEFAULT_HOUSEHOLD_ID, validLimit];
@@ -654,24 +732,34 @@ export async function fetchHistoryLedger(params?: {
         r.created_at instanceof Date
           ? r.created_at.toISOString()
           : String(r.created_at);
+      const effectiveDate =
+        r.effective_date instanceof Date
+          ? r.effective_date.toISOString()
+          : (r.effective_date ? String(r.effective_date) : createdAt);
+      const allowanceDate = r.allowance_date ? String(r.allowance_date) : null;
 
       if (isCredit) {
         const creditKind = (r.credit_kind as CreditKind) || "manual";
         let icon = "💰";
         let title = "Credit";
+        let note: string | null = null;
 
         if (creditKind === "allowance") {
           icon = "💰";
-          title = "Daily allowance";
+          const dateLabel = allowanceDate ? formatAllowanceDateLabel(allowanceDate) : null;
+          title = dateLabel ? `Daily allowance · ${dateLabel}` : "Daily allowance";
+          note = dateLabel ? `Allowance for ${dateLabel}` : "Daily allowance";
         } else if (creditKind === "earn") {
           icon = "🎮";
           title = "Earn reward";
+          note = parseCreditSubtitle(creditKind, r.description);
         } else if (creditKind === "streak") {
           icon = "🔥";
           title = "Streak bonus";
+          note = parseCreditSubtitle(creditKind, r.description);
+        } else {
+          note = parseCreditSubtitle(creditKind, r.description);
         }
-
-        const subtitle = parseCreditSubtitle(creditKind, r.description);
 
         return {
           id: r.id,
@@ -681,12 +769,14 @@ export async function fetchHistoryLedger(params?: {
           creditKind,
           title,
           icon,
-          note: subtitle,
+          note,
           splitDetail: null,
           srujanAmountPaise: null,
           dishaAmountPaise: null,
           coverageApproved: null,
           createdAt,
+          allowanceDate,
+          effectiveDate,
         };
       }
 
@@ -718,6 +808,8 @@ export async function fetchHistoryLedger(params?: {
         dishaAmountPaise: r.disha_amount_paise,
         coverageApproved: Boolean(r.coverage_approved),
         createdAt,
+        allowanceDate: null,
+        effectiveDate,
       };
     });
 

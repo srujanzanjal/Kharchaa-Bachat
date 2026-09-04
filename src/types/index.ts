@@ -66,6 +66,8 @@ export interface HistoryLedgerItem {
   dishaAmountPaise?: number | null;
   coverageApproved?: boolean | null;
   createdAt: string;
+  allowanceDate?: string | null;
+  effectiveDate?: string | null;
 }
 
 // ── Database Models ────────────────────────────────

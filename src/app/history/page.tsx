@@ -127,13 +127,16 @@ export default function HistoryPage() {
       .reduce((sum, i) => sum + i.amountPaise, 0);
   }, [items]);
 
-  // Group items chronologically by IST date
+  // Group items chronologically by authoritative financial date
   const groupedItems = useMemo(() => {
     const groups: { dateKey: string; items: HistoryLedgerItem[] }[] = [];
     const map = new Map<string, HistoryLedgerItem[]>();
 
     for (const item of filteredItems) {
-      const dateKey = getIstDateKey(item.createdAt);
+      // Authoritative financial date: allowanceDate for allowances, or IST created date
+      const dateKey =
+        item.allowanceDate ||
+        getIstDateKey(item.effectiveDate || item.createdAt);
       if (!map.has(dateKey)) {
         const arr: HistoryLedgerItem[] = [];
         map.set(dateKey, arr);
@@ -258,20 +261,30 @@ export default function HistoryPage() {
                 </div>
 
                 <div className="divide-y divide-border/40">
-                  {dayItems.map((item) => (
-                    <ExpenseRow
-                      key={item.id}
-                      flowType={item.flowType}
-                      amountPaise={item.amountPaise}
-                      owner={item.owner}
-                      category={item.category}
-                      icon={item.icon}
-                      title={item.title}
-                      note={item.note}
-                      splitDetail={item.splitDetail}
-                      timestamp={formatIstTime(item.createdAt)}
-                    />
-                  ))}
+                  {dayItems.map((item) => {
+                    const isCatchUp = Boolean(
+                      item.allowanceDate &&
+                        getIstDateKey(item.createdAt) !== item.allowanceDate
+                    );
+                    return (
+                      <ExpenseRow
+                        key={item.id}
+                        flowType={item.flowType}
+                        amountPaise={item.amountPaise}
+                        owner={item.owner}
+                        category={item.category}
+                        icon={item.icon}
+                        title={item.title}
+                        note={item.note}
+                        splitDetail={item.splitDetail}
+                        timestamp={
+                          isCatchUp
+                            ? "Catch-up credit"
+                            : formatIstTime(item.createdAt)
+                        }
+                      />
+                    );
+                  })}
                 </div>
               </div>
             ))}

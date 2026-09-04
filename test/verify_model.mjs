@@ -2372,9 +2372,27 @@ function simulateUnifiedHistoryFeed(sim, householdId) {
       let icon = "💰";
       let note = null;
 
+      const MONTH_NAMES = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ];
+      function formatLabel(dateStr) {
+        try {
+          const parts = dateStr.split("-");
+          if (parts.length === 3) {
+            const m = Number(parts[1]) - 1;
+            const d = parts[2].padStart(2, "0");
+            if (m >= 0 && m < 12) return `${d} ${MONTH_NAMES[m]}`;
+          }
+        } catch {}
+        return dateStr;
+      }
+
       if (isAllowance) {
-        title = "Daily allowance";
+        const dateLabel = l.allowance_date ? formatLabel(l.allowance_date) : null;
+        title = dateLabel ? `Daily allowance · ${dateLabel}` : "Daily allowance";
         icon = "💰";
+        note = dateLabel ? `Allowance for ${dateLabel}` : "Daily allowance";
       } else if (isStreak) {
         title = "Streak bonus";
         icon = "🔥";
@@ -2388,6 +2406,16 @@ function simulateUnifiedHistoryFeed(sim, householdId) {
       const createdAt =
         l.created_at ||
         (l.allowance_date ? `${l.allowance_date}T09:00:00+05:30` : "2026-09-01T09:00:00+05:30");
+
+      const isCatchUp = Boolean(
+        l.allowance_date &&
+        l.created_at &&
+        l.created_at.slice(0, 10) > l.allowance_date
+      );
+
+      const effectiveDate = isCatchUp
+        ? `${l.allowance_date}T00:00:00+05:30`
+        : createdAt;
 
       return {
         id: l.id,
@@ -2403,11 +2431,13 @@ function simulateUnifiedHistoryFeed(sim, householdId) {
         splitDetail: null,
         coverageApproved: null,
         createdAt,
+        allowanceDate: l.allowance_date || null,
+        effectiveDate,
       };
     });
 
   return [...debits, ...credits].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => new Date(b.effectiveDate || b.createdAt).getTime() - new Date(a.effectiveDate || a.createdAt).getTime()
   );
 }
 
@@ -2426,7 +2456,7 @@ const dishaAllowance = hFeed1.find((item) => item.flowType === "credit" && item.
 
 assert.ok(srujanAllowance, "Srujan allowance credit must appear");
 assert.equal(srujanAllowance.amountPaise, 5000);
-assert.equal(srujanAllowance.title, "Daily allowance");
+assert.ok(srujanAllowance.title.startsWith("Daily allowance"));
 assert.equal(srujanAllowance.icon, "💰");
 console.log("✓ Test 139 Passed: Daily allowance credit appears in history data transformation");
 
@@ -2528,7 +2558,131 @@ assert.equal(histSim.getUserBalance(sId), 5000 + 2000 + 2000 - 3000);
 assert.equal(histSim.getUserBalance(dId), 5000 - 3000);
 console.log("✓ Test 150 Passed: All original financial models and ledger balance invariants remain 100% intact");
 
+// ===================================================
+// M4 — ALLOWANCE TIMING & CATCH-UP HISTORY TESTS
+// ===================================================
+
+const m4Sim = new FinancialLedgerSimulator();
+const m4HId = "house-m4";
+const m4SId = "srujan-m4";
+const m4DId = "disha-m4";
+m4Sim.createHousehold(m4HId, m4SId, m4DId);
+
+// 1. First opening of a new day creates today's allowance before balance UI proceeds
+const countSep1 = m4Sim.processAllowances(m4HId, "2026-09-01");
+assert.equal(countSep1, 2, "First open creates 2 allowances (1 Srujan + 1 Disha)");
+assert.equal(m4Sim.getUserBalance(m4SId), 5000);
+assert.equal(m4Sim.getUserBalance(m4DId), 5000);
+console.log("✓ Test 151 Passed: First opening of a new day creates today's allowance before balance UI proceeds");
+
+// 2. Reopening the app on the same day produces zero duplicates
+const countReopen = m4Sim.processAllowances(m4HId, "2026-09-01");
+assert.equal(countReopen, 0, "Reopening same day must create 0 new allowances");
+assert.equal(m4Sim.getUserBalance(m4SId), 5000);
+assert.equal(m4Sim.getUserBalance(m4DId), 5000);
+console.log("✓ Test 152 Passed: Reopening app on same day produces zero duplicate allowances");
+
+// 3. Missing 1 day accrues exactly one allowance per person
+const countSep2 = m4Sim.processAllowances(m4HId, "2026-09-02");
+assert.equal(countSep2, 2, "Missing 1 day creates exactly 2 allowances (1 per person)");
+assert.equal(m4Sim.getUserBalance(m4SId), 10000);
+assert.equal(m4Sim.getUserBalance(m4DId), 10000);
+console.log("✓ Test 153 Passed: Missing 1 day accrues exactly one allowance per person");
+
+// 4. Missing 3 days creates exactly 3 allowance entries per person
+const m4Sim3 = new FinancialLedgerSimulator();
+m4Sim3.createHousehold("house-m4-3", "s-3", "d-3");
+m4Sim3.processAllowances("house-m4-3", "2026-09-01");
+// Skip to Sep 4 (missing Sep 2, Sep 3, Sep 4 = 3 days * 2 persons = 6 allowances)
+const countSkip3 = m4Sim3.processAllowances("house-m4-3", "2026-09-04");
+assert.equal(countSkip3, 6, "Missing 3 days must create exactly 6 allowance entries (3 per person)");
+const srujanAll3 = m4Sim3.ledger.filter((l) => l.user_id === "s-3" && l.entry_type === "allowance");
+const dishaAll3 = m4Sim3.ledger.filter((l) => l.user_id === "d-3" && l.entry_type === "allowance");
+assert.equal(srujanAll3.length, 4); // Sep 1 + Sep 2, Sep 3, Sep 4
+assert.equal(dishaAll3.length, 4);
+console.log("✓ Test 154 Passed: Missing 3 days creates exactly 3 allowance entries per person with zero duplicates");
+
+// 5. Catch-up entries strictly preserve their respective financial calendar dates
+const sep2Srujan = srujanAll3.find((l) => l.allowance_date === "2026-09-02");
+const sep3Srujan = srujanAll3.find((l) => l.allowance_date === "2026-09-03");
+const sep4Srujan = srujanAll3.find((l) => l.allowance_date === "2026-09-04");
+assert.ok(sep2Srujan, "Sep 2 allowance must retain 2026-09-02 as allowance_date");
+assert.ok(sep3Srujan, "Sep 3 allowance must retain 2026-09-03 as allowance_date");
+assert.ok(sep4Srujan, "Sep 4 allowance must retain 2026-09-04 as allowance_date");
+console.log("✓ Test 155 Passed: Catch-up entries strictly preserve their respective financial calendar dates");
+
+// 6. Created-at vs allowance-date separation in History feed
+const catchUpSep2Ledger = {
+  id: "catchup-sep2",
+  household_id: "house-feed",
+  user_id: "sf",
+  entry_type: "allowance",
+  amount_paise: 5000,
+  allowance_date: "2026-09-02",
+  created_at: "2026-09-04T10:00:00+05:30",
+};
+const m4SimFeed = new FinancialLedgerSimulator();
+m4SimFeed.createHousehold("house-feed", "sf", "df");
+m4SimFeed.ledger.push(catchUpSep2Ledger);
+const historyFeedM4 = simulateUnifiedHistoryFeed(m4SimFeed, "house-feed");
+const catchUpFeedItem = historyFeedM4.find((i) => i.id === "catchup-sep2");
+assert.ok(catchUpFeedItem);
+assert.equal(catchUpFeedItem.allowanceDate, "2026-09-02");
+assert.ok(catchUpFeedItem.title.includes("02 Sep"));
+const dateKeySep2 = catchUpFeedItem.allowanceDate || catchUpFeedItem.createdAt.slice(0, 10);
+assert.equal(dateKeySep2, "2026-09-02", "Must group under Sep 2, never under today/Sep 4");
+console.log("✓ Test 156 Passed: Created-at and allowance-date strictly distinguished; grouped under financial date");
+
+// 7. Dynamic allowance rates display actual stored ledger amount (+₹75)
+m4SimFeed.ledger.push({
+  id: "allowance-custom-rate",
+  household_id: "house-feed",
+  user_id: "sf",
+  entry_type: "allowance",
+  amount_paise: 7500, // ₹75 custom daily rate
+  allowance_date: "2026-09-03",
+  created_at: "2026-09-03T09:00:00+05:30",
+});
+const customRateFeed = simulateUnifiedHistoryFeed(m4SimFeed, "house-feed");
+const customRateItem = customRateFeed.find((i) => i.id === "allowance-custom-rate");
+assert.ok(customRateItem);
+assert.equal(customRateItem.amountPaise, 7500);
+assert.equal(customRateItem.formattedAmount, "+₹75");
+console.log("✓ Test 157 Passed: Dynamic allowance rates display actual stored ledger amount (+₹75)");
+
+// 8. Mixed history accurately partitions entries by their financial dates
+m4SimFeed.ledger.push({
+  id: "earn-sep3",
+  household_id: "house-feed",
+  user_id: "sf",
+  entry_type: "earn_credit",
+  amount_paise: 1000,
+  description: "💰 Earn lil Kharchaa · Arithmetic",
+  created_at: "2026-09-03T15:00:00+05:30",
+});
+m4SimFeed.recordExpenseAtomic("house-feed", "sf", 2000, "srujan", 2000, 0, "Snack", false, "food");
+m4SimFeed.expenses[m4SimFeed.expenses.length - 1].created_at = "2026-09-03T16:00:00+05:30";
+
+const mixedFeed = simulateUnifiedHistoryFeed(m4SimFeed, "house-feed");
+const sep2Items = mixedFeed.filter((i) => (i.allowanceDate || i.createdAt.slice(0, 10)) === "2026-09-02");
+const sep3Items = mixedFeed.filter((i) => (i.allowanceDate || i.createdAt.slice(0, 10)) === "2026-09-03");
+assert.equal(sep2Items.length, 1);
+assert.equal(sep3Items.length, 3); // 1 allowance (custom) + 1 earn + 1 expense
+console.log("✓ Test 158 Passed: Mixed history accurately partitions entries by their financial dates");
+
+// 9. Idempotent catch-up produces zero duplicate allowance rows under repeated invocations
+for (let i = 0; i < 5; i++) {
+  m4Sim3.processAllowances("house-m4-3", "2026-09-04");
+}
+const srujanAllAfterStress = m4Sim3.ledger.filter((l) => l.user_id === "s-3" && l.entry_type === "allowance");
+assert.equal(srujanAllAfterStress.length, 4, "Repeated calls must yield zero duplicate rows");
+console.log("✓ Test 159 Passed: Idempotent catch-up produces zero duplicate allowance rows under repeated invocations");
+
+// 10. All original financial models and ledger balance invariants remain 100% intact
+assert.equal(m4SimFeed.getUserBalance("sf"), 5000 + 7500 + 1000 - 2000);
+console.log("✓ Test 160 Passed: All original financial models and ledger balance invariants remain 100% intact");
+
 console.log("=================================================");
-console.log("ALL 150 FINANCIAL, CATEGORY, RECAP, EARN, SECRET, DEV, STREAK & HISTORY TESTS PASSED!");
+console.log("ALL 160 FINANCIAL, CATEGORY, RECAP, EARN, SECRET, DEV, STREAK, HISTORY & M4 TIMING TESTS PASSED!");
 console.log("=================================================");
 

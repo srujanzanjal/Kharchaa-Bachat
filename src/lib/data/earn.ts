@@ -47,6 +47,16 @@ export async function fetchEarnStatus(
 
     const db = getDb();
 
+    // Ensure allowance catch-up is up to date for today (IST)
+    try {
+      await db.query(
+        "SELECT process_household_allowances($1, (NOW() AT TIME ZONE 'Asia/Kolkata')::date);",
+        [DEFAULT_HOUSEHOLD_ID]
+      );
+    } catch (e) {
+      console.error("[fetchEarnStatus.allowanceCatchUp]", e);
+    }
+
     // 1. Get today's game earnings (IST)
     const todayGameRes = await db.query(
       `SELECT COALESCE(SUM(reward_paise), 0)::integer AS today_game_earned
@@ -411,6 +421,17 @@ export async function submitChallengeAnswer(params: {
 
     // 5. Call atomic stored procedure
     const db = getDb();
+
+    // Ensure allowance catch-up is up to date for today (IST)
+    try {
+      await db.query(
+        "SELECT process_household_allowances($1, (NOW() AT TIME ZONE 'Asia/Kolkata')::date);",
+        [DEFAULT_HOUSEHOLD_ID]
+      );
+    } catch (e) {
+      console.error("[submitChallengeAnswer.allowanceCatchUp]", e);
+    }
+
     const result = await db.query(
       `SELECT claim_earn_reward($1, $2, $3, $4, $5) AS result;`,
       [

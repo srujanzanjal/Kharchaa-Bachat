@@ -31,7 +31,14 @@ export default function DashboardPage() {
 
     async function loadData() {
       try {
-        // 1. Initial summary lookup
+        // 1. Run allowance catch-up first so today's allowance is guaranteed
+        try {
+          await runAllowanceCatchUp();
+        } catch {
+          // Non-blocking fallback; fetchHouseholdSummary also enforces server-side catch-up
+        }
+
+        // 2. Fetch authoritative household summary (balances include today's allowance)
         const summaryRes = await fetchHouseholdSummary();
 
         if (!isMounted) return;
@@ -42,26 +49,8 @@ export default function DashboardPage() {
           return;
         }
 
-        let currentSummary = summaryRes.data;
+        const currentSummary = summaryRes.data;
         setSummary(currentSummary);
-
-        // 2. Seamless background catch-up
-        try {
-          const catchUpRes = await runAllowanceCatchUp();
-          if (
-            catchUpRes.status === "success" &&
-            catchUpRes.data &&
-            catchUpRes.data.allowances_created > 0
-          ) {
-            const refreshed = await fetchHouseholdSummary();
-            if (refreshed.status === "success" && refreshed.data && isMounted) {
-              currentSummary = refreshed.data;
-              setSummary(currentSummary);
-            }
-          }
-        } catch {
-          // Non-blocking catchup fallback
-        }
 
         // 3. Fetch recent expenses
         const expensesRes = await fetchRecentExpenses(10);
